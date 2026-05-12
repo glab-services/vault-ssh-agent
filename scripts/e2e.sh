@@ -76,7 +76,7 @@ rm -f "${SOCK_PATH}" || true
 
 set +e
 AGENT_PID=""
-go run "${ROOT_DIR}/cmd/vault-ssh-agent" --config "${CFG_PATH}" start >/tmp/vault-ssh-agent-e2e.log 2>&1 &
+go run "${ROOT_DIR}/cmd/ssh-agent-service" --config "${CFG_PATH}" start >/tmp/vault-ssh-agent-e2e.log 2>&1 &
 AGENT_PID="$!"
 set -e
 

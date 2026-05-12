@@ -33,13 +33,18 @@ export VAULT_TOKEN="hvs...."
 export GOCACHE=/tmp/vault-ssh-agent-go-build-cache
 export GOMODCACHE=/tmp/vault-ssh-agent-go-modcache
 
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml start
+go run -buildvcs=false ./cmd/ssh-agent-service --config .dev/config.yaml start
 ```
+
+If you omit `--config`, the service will auto-create a default config at:
+`$XDG_CONFIG_HOME/vault-ssh-agent/config.yaml` (or `~/.config/vault-ssh-agent/config.yaml`).
+
+If running as root, it will use `/etc/vault-ssh-agent/config.yaml`.
 
 Debug:
 
 ```bash
-go run -buildvcs=false ./cmd/vault-ssh-agent --debug --config .dev/config.yaml start
+go run -buildvcs=false ./cmd/ssh-agent-service --debug --config .dev/config.yaml start
 ```
 
 ### 3) Point OpenSSH At The Agent
@@ -69,34 +74,34 @@ Notes:
 Create a new Transit key and register it in the keystore:
 
 ```bash
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml \
+go run -buildvcs=false ./cmd/ssh-agent-cli --config .dev/config.yaml \
   key-create ssh-prod-ed25519 --type ed25519 --comment "prod key"
 ```
 
 List keys known to the agent (from Vault KV keystore):
 
 ```bash
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml key-list
+go run -buildvcs=false ./cmd/ssh-agent-cli --config .dev/config.yaml key-list
 ```
 
 Show a key (prints metadata + OpenSSH public key line):
 
 ```bash
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml key-show ssh-prod-ed25519
+go run -buildvcs=false ./cmd/ssh-agent-cli --config .dev/config.yaml key-show ssh-prod-ed25519
 ```
 
 Disable / enable (affects what the agent advertises):
 
 ```bash
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml key-disable ssh-prod-ed25519
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml key-enable  ssh-prod-ed25519
+go run -buildvcs=false ./cmd/ssh-agent-cli --config .dev/config.yaml key-disable ssh-prod-ed25519
+go run -buildvcs=false ./cmd/ssh-agent-cli --config .dev/config.yaml key-enable  ssh-prod-ed25519
 ```
 
 Remove metadata only (and optionally delete Transit key material too):
 
 ```bash
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml key-remove ssh-prod-ed25519
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml key-remove ssh-prod-ed25519 --delete-transit
+go run -buildvcs=false ./cmd/ssh-agent-cli --config .dev/config.yaml key-remove ssh-prod-ed25519
+go run -buildvcs=false ./cmd/ssh-agent-cli --config .dev/config.yaml key-remove ssh-prod-ed25519 --delete-transit
 ```
 
 ### 6) Register An Existing Transit Key (Without Creating It)
@@ -104,7 +109,7 @@ go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml key-remov
 If the Transit key already exists in Vault and you only want to register it:
 
 ```bash
-go run -buildvcs=false ./cmd/vault-ssh-agent --config .dev/config.yaml \
+go run -buildvcs=false ./cmd/ssh-agent-cli --config .dev/config.yaml \
   key-add mykey --transit-key ssh-existing-key --transit-mount transit --comment "existing"
 ```
 
@@ -175,6 +180,6 @@ bash scripts/e2e-running.sh
 If this directory isn’t a git repo (or IDE can’t read it), build with:
 
 ```bash
-go build -buildvcs=false -o ./bin/vault-ssh-agent ./cmd/vault-ssh-agent
+go build -buildvcs=false -o ./bin/ssh-agent-service ./cmd/ssh-agent-service
+go build -buildvcs=false -o ./bin/ssh-agent-cli ./cmd/ssh-agent-cli
 ```
-

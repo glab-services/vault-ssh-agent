@@ -6,11 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
-	"github.com/example/vault-ssh-agent/internal/agentd"
 	"github.com/example/vault-ssh-agent/internal/config"
 	"github.com/example/vault-ssh-agent/internal/log"
 	"github.com/example/vault-ssh-agent/internal/vault"
@@ -24,7 +21,7 @@ func main() {
 func run(args []string) int {
 	ctx := context.Background()
 
-	fs := flag.NewFlagSet("vault-ssh-agent", flag.ContinueOnError)
+	fs := flag.NewFlagSet("ssh-agent-cli", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
 	var cfgPath string
@@ -44,6 +41,19 @@ func run(args []string) int {
 
 	logger := log.New(debug)
 
+	if strings.TrimSpace(cfgPath) == "" {
+		p, err := config.DefaultPath()
+		if err != nil {
+			logger.Error("resolve default config path failed", "err", err)
+			return 1
+		}
+		cfgPath = p
+	}
+	if _, err := config.EnsureDefaultConfig(cfgPath); err != nil {
+		logger.Error("ensure default config failed", "err", err)
+		return 1
+	}
+
 	cfg, err := config.LoadFromPath(cfgPath)
 	if err != nil {
 		logger.Error("load config failed", "err", err)
@@ -52,33 +62,14 @@ func run(args []string) int {
 
 	switch sub {
 	case "list":
-		// Deprecated: local config-managed keys. Use key-list for Vault-stored keys.
+		// Deprecated: config-managed keys list. Kept for debugging only.
 		for _, k := range cfg.Keys {
 			fmt.Printf("%s\t%s\t%s/%s\n", k.Name, k.Backend, k.TransitMount, k.TransitKey)
 		}
 		return 0
 	case "refresh":
-		// With transit-backed keys we don't persist cert caches; refresh is a no-op
-		// beyond verifying Vault access.
+		// Transit-backed keys have no local cert cache. Keep the command for UX.
 		logger.Info("refresh is a no-op for transit-backed keys")
-		return 0
-	case "start":
-		ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-		defer cancel()
-
-		d, err := agentd.New(logger, cfg)
-		if err != nil {
-			logger.Error("init daemon failed", "err", err)
-			return 1
-		}
-		if err := d.InitVault(ctx); err != nil {
-			logger.Error("init vault failed", "err", err)
-			return 1
-		}
-		if err := d.Serve(ctx); err != nil {
-			logger.Error("serve failed", "err", err)
-			return 1
-		}
 		return 0
 	case "key-create", "key-add", "key-enable", "key-disable", "key-list", "key-show", "key-remove":
 		return runKeyCmd(ctx, logger, cfg, sub, fs.Args()[1:])
@@ -91,16 +82,15 @@ func run(args []string) int {
 
 func usage(w *os.File) {
 	fmt.Fprintln(w, "usage:")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml list")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml refresh")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml start")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml key-create <name> [--type ed25519|rsa-2048|rsa-3072|rsa-4096] [--transit-mount transit]")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml key-add <name> --transit-key <key> [--transit-mount transit] [--comment text]")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml key-enable <name>")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml key-disable <name>")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml key-list")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml key-show <name>")
-	fmt.Fprintln(w, "  vault-ssh-agent --config path/to/config.yaml key-remove <name> [--delete-transit]")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] list")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] refresh")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] key-create <name> [--type ed25519|rsa-2048|rsa-3072|rsa-4096] [--transit-mount transit] [--comment text]")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] key-add <name> --transit-key <key> [--transit-mount transit] [--comment text]")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] key-enable <name>")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] key-disable <name>")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] key-list")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] key-show <name>")
+	fmt.Fprintln(w, "  ssh-agent-cli [--config path/to/config.yaml] key-remove <name> [--delete-transit]")
 }
 
 func runKeyCmd(ctx context.Context, logger *slog.Logger, cfg *config.Config, sub string, args []string) int {
@@ -111,7 +101,7 @@ func runKeyCmd(ctx context.Context, logger *slog.Logger, cfg *config.Config, sub
 	var keyType string
 	var comment string
 	var deleteTransit bool
-	fs.StringVar(&transitMount, "transit-mount", "transit", "Transit mount path")
+	fs.StringVar(&transitMount, "transit-mount", cfg.Vault.TransitMount, "Transit mount path")
 	fs.StringVar(&keyType, "type", "ed25519", "Transit key type (ed25519|rsa-2048|rsa-3072|rsa-4096)")
 	fs.StringVar(&transitKey, "transit-key", "", "Transit key name (for key-add)")
 	fs.StringVar(&comment, "comment", "", "Human-friendly comment (stored in Vault)")
@@ -279,7 +269,6 @@ func runKeyCmd(ctx context.Context, logger *slog.Logger, cfg *config.Config, sub
 			return 1
 		}
 		if ok && deleteTransit {
-			// Vault requires deletion_allowed=true for key deletion.
 			_ = tm.AllowDeletion(ctx, e.TransitMount, e.TransitKey)
 			if err := tm.DeleteKey(ctx, e.TransitMount, e.TransitKey); err != nil {
 				logger.Error("delete transit key failed", "err", err)

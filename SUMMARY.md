@@ -19,7 +19,11 @@ Note: in this repo, Go builds/tests should use writable caches:
 
 ## Local Config Example
 
-Create a config file (example path: `.dev/config.yaml`):
+Create a config file (example path: `.dev/config.yaml`). If you omit `--config`,
+the service/CLI will auto-create a default config at:
+
+- user: `$XDG_CONFIG_HOME/vault-ssh-agent/config.yaml` (or `~/.config/vault-ssh-agent/config.yaml`)
+- root: `/etc/vault-ssh-agent/config.yaml`
 
 ```yaml
 vault:
@@ -51,7 +55,7 @@ export VAULT_TOKEN=...
 export GOCACHE=/tmp/vault-ssh-agent-go-build-cache
 export GOMODCACHE=/tmp/vault-ssh-agent-go-modcache
 
-go run ./cmd/vault-ssh-agent --config .dev/config.yaml start
+go run ./cmd/ssh-agent-service --config .dev/config.yaml start
 ```
 
 Point OpenSSH at it:
@@ -74,27 +78,27 @@ ssh-add -d ~/.ssh/id_ed25519.pub
 List keys known to the agent (from Vault keystore):
 
 ```bash
-go run ./cmd/vault-ssh-agent --config .dev/config.yaml key-list
+go run ./cmd/ssh-agent-cli --config .dev/config.yaml key-list
 ```
 
 Show one key (metadata + OpenSSH public key line):
 
 ```bash
-go run ./cmd/vault-ssh-agent --config .dev/config.yaml key-show <name>
+go run ./cmd/ssh-agent-cli --config .dev/config.yaml key-show <name>
 ```
 
 Disable/enable:
 
 ```bash
-go run ./cmd/vault-ssh-agent --config .dev/config.yaml key-disable <name>
-go run ./cmd/vault-ssh-agent --config .dev/config.yaml key-enable <name>
+go run ./cmd/ssh-agent-cli --config .dev/config.yaml key-disable <name>
+go run ./cmd/ssh-agent-cli --config .dev/config.yaml key-enable <name>
 ```
 
 Remove metadata only (and optionally delete Transit key material):
 
 ```bash
-go run ./cmd/vault-ssh-agent --config .dev/config.yaml key-remove <name>
-go run ./cmd/vault-ssh-agent --config .dev/config.yaml key-remove <name> --delete-transit
+go run ./cmd/ssh-agent-cli --config .dev/config.yaml key-remove <name>
+go run ./cmd/ssh-agent-cli --config .dev/config.yaml key-remove <name> --delete-transit
 ```
 
 ## E2E Script
